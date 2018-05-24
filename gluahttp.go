@@ -1,14 +1,18 @@
 package gluahttp
 
-import "github.com/yuin/gopher-lua"
-import "net/http"
-import "fmt"
-import "errors"
-import "io/ioutil"
-import "strings"
+import (
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strings"
+
+	"github.com/yuin/gopher-lua"
+)
 
 type httpModule struct {
-	do func(req *http.Request) (*http.Response, error)
+	do    func(req *http.Request) (*http.Response, error)
+	luaDo func(L *lua.LState, req *http.Request) (*http.Response, error)
 }
 
 type empty struct{}
@@ -20,6 +24,12 @@ func NewHttpModule(client *http.Client) *httpModule {
 func NewHttpModuleWithDo(do func(req *http.Request) (*http.Response, error)) *httpModule {
 	return &httpModule{
 		do: do,
+	}
+}
+
+func NewHttpModuleWithLuaDo(luaDo func(L *lua.LState, req *http.Request) (*http.Response, error)) *httpModule {
+	return &httpModule{
+		luaDo: luaDo,
 	}
 }
 
@@ -179,7 +189,12 @@ func (h *httpModule) doRequest(L *lua.LState, method string, url string, options
 		}
 	}
 
-	res, err := h.do(req)
+	var res *http.Response
+	if h.luaDo != nil {
+		res, err = h.luaDo(L, req)
+	} else {
+		res, err = h.do(req)
+	}
 	if err != nil {
 		return nil, err
 	}
